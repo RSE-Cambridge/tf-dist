@@ -29,8 +29,11 @@ with h5py.File(output, "w") as f:
             for ext in ['jpg', 'jpeg', 'JPG', 'JPEG']:
                 for file_path in glob.iglob(os.path.join(category_path, '*.%s'%ext)):
                     image = PIL.Image.open(file_path)
-                    image.thumbnail(img_size)
+                    image = image.convert('RGB')
+                    image = image.resize(img_size)
 
                     h5_append(data, np.asarray(image))
                     h5_append(labels, category_index)
+
+            print("done %s/%s" % (s, category_path))
 
