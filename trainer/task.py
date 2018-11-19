@@ -32,7 +32,7 @@ def get_args():
     default='mirror')
 
   parser.add_argument('--dataset',
-    choices=['cifar10', 'ecoset', 'imagenet'],
+    choices=['cifar10', 'ecoset', 'imagenet', 'ecoset-h5', 'imagenet-h5'],
     default='cifar10')
 
   return parser.parse_args()
@@ -43,6 +43,12 @@ def get_dataset(dataset):
       return (32, 32, 3), 10, \
               cifar10.test_input_fn, \
               cifar10.train_input_fn
+  elif dataset.endswith('-h5'):
+      import filesh5
+      filename = "/home/js947/rds/rds-hpc-support/rse/full_%s.h5" % dataset[:-3]
+      return (64, 64, 3), filesh5.num_classes(filename), \
+              filesh5.make_input_fn(filename, "test"), \
+              filesh5.make_input_fn(filename, "train")
   else:
       basepath = "/home/js947/rds/rds-hpc-support/rse/full_%s" % dataset
       import files

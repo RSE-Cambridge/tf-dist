@@ -1,6 +1,5 @@
 import os, glob
 import tensorflow as tf
-from tensorflow.data import Dataset
 
 def classes(path):
     return [line for line in open(os.path.join(path, '..', 'cats.txt'), 'r')]
