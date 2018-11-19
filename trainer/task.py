@@ -31,46 +31,29 @@ def get_args():
     choices=['mirror', 'collective'],
     default='mirror')
 
-  parser.add_argument('--subtract-mean', dest='subtract_mean', action='store_true')
-  parser.add_argument('--no-subtract-mean', dest='subtract_mean', action='store_false')
-  parser.set_defaults(subtract_mean=True)
+  parser.add_argument('--dataset',
+    choices=['cifar10', 'ecoset', 'imagenet'],
+    default='cifar10')
 
   return parser.parse_args()
 
+def get_dataset(dataset):
+  if dataset == 'cifar10':
+      import cifar10
+      return (32, 32, 3), 10, \
+              cifar10.test_input_fn, \
+              cifar10.train_input_fn
+  else:
+      basepath = "/home/js947/rds/rds-hpc-support/rse/full_%s" % dataset
+      import files
+      return (64, 64, 3), files.num_classes("%s/test"%basepath), \
+              files.make_input_fn("%s/test"%basepath), \
+              files.make_input_fn("%s/train"%basepath) 
+
 def train_and_evaluate(hparams):
-  (train_images, train_labels), (test_images, test_labels) = \
-        tf.keras.datasets.cifar10.load_data()
+  img_shape, num_classes, test_input_fn, train_input_fn = get_dataset(hparams.dataset)  
 
-  img_width, img_height, img_channels = 32, 32, 3
-  label_dimensions = 10
-
-  n_train_images = len(train_images)
-  n_test_images = len(test_images)
-
-  train_images = np.asarray(train_images, dtype=np.float32) / 255
-  test_images = np.asarray(test_images, dtype=np.float32) / 255
-
-  if hparams.subtract_mean:
-    train_images_mean = np.mean(train_images, axis=0)
-    train_images -= train_images_mean
-    test_images -= train_images_mean
-
-  train_images = train_images.reshape((-1, img_width, img_height, img_channels))
-  test_images = test_images.reshape((-1, img_width, img_height, img_channels))
-
-
-  debug("shape train_images %s" % (train_images.shape,))
-  debug("shape train_labels %s" % (train_labels.shape,))
-  debug("shape test_images %s" % (test_images.shape,))
-  debug("shape test_labels %s" % (test_labels.shape,))
-
-  train_labels  = tf.keras.utils.to_categorical(train_labels, label_dimensions)
-  test_labels = tf.keras.utils.to_categorical(test_labels, label_dimensions)
-
-  train_labels = train_labels.astype(np.float32)
-  test_labels = test_labels.astype(np.float32)
-
-  model = model_fn(img_width, img_height, img_channels, label_dimensions, hparams.learning_rate)
+  model = model_fn(img_shape, num_classes, hparams.learning_rate)
   model.summary()
 
   strategy = {
@@ -82,16 +65,12 @@ def train_and_evaluate(hparams):
   estimator = tf.keras.estimator.model_to_estimator(model, \
           model_dir=hparams.job_dir, config=config)
 
-  train_input_fn = lambda: input_fn(train_images, train_labels, hparams.batch_size)
-  test_input_fn = lambda: input_fn(test_images, test_labels, hparams.batch_size)
+  train_spec = tf.estimator.TrainSpec(
+          input_fn=lambda: train_input_fn(hparams.batch_size))
 
-  train_labels = np.asarray(train_labels).astype('int').reshape((-1, label_dimensions))
-  train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn)
-
-  test_labels = np.asarray(test_labels).astype('int').reshape((-1, label_dimensions))
   eval_spec = tf.estimator.EvalSpec(
-          input_fn=test_input_fn,
-          steps=n_test_images/hparams.batch_size,
+          input_fn=lambda: test_input_fn(hparams.batch_size),
+          steps=600,
           start_delay_secs=10,
           throttle_secs=10)
 

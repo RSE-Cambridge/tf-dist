@@ -10,8 +10,8 @@ metrics = [
         tf.keras.metrics.top_k_categorical_accuracy
         ]
 
-def model_fn(img_width, img_height, img_channels, classes, learning_rate):
-  input = Input((img_width, img_height, img_channels))
+def model_fn(img_shape, classes, learning_rate):
+  input = Input(img_shape)
 
   from tensorflow.keras.applications.resnet50 import ResNet50
   model = ResNet50(weights=None, input_tensor=input, classes=classes)
@@ -22,7 +22,7 @@ def model_fn(img_width, img_height, img_channels, classes, learning_rate):
   
   return model
 
-def model_fn_new(img_width, img_height, img_channels, num_classes, learning_rate):
+def model_fn_new(img_shape, num_classes, learning_rate):
     # Subtracting pixel mean improves accuracy
 
 # Model parameter
@@ -54,9 +54,9 @@ def model_fn_new(img_width, img_height, img_channels, num_classes, learning_rate
     from resnet import resnet_v1, resnet_v2
 
     if version == 2:
-        model = resnet_v2(input_shape=(img_width, img_height, img_channels), depth=depth)
+        model = resnet_v2(input_shape=img_shape, depth=depth)
     else:
-        model = resnet_v1(input_shape=(img_width, img_height, img_channels), depth=depth)
+        model = resnet_v1(input_shape=img_shape, depth=depth)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=metrics)
