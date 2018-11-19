@@ -6,7 +6,7 @@
 #SBATCH --exclusive
 #SBATCH -t 12:00:00 
 
-source runenv
+source run.env
 
 if [[ $SLURM_NNODES -gt 1 ]]
 then
