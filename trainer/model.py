@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input
 from tensorflow.logging import info, debug
-
+import os
 
 metrics = [
         tf.keras.metrics.categorical_accuracy,
@@ -15,11 +15,12 @@ def model_fn(img_shape, classes, learning_rate):
 
   from tensorflow.keras.applications.resnet50 import ResNet50
   model = ResNet50(weights=None, input_tensor=input, classes=classes)
-
+  
   optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
   model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=metrics)
-  
+  if not os.path.isfile('my_model_weights.h5'): 
+      model.save_weights('my_model_weights.h5') 
   return model
 
 def model_fn_new(img_shape, num_classes, learning_rate):

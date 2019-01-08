@@ -5,8 +5,12 @@ from __future__ import print_function
 import argparse
 
 import numpy as np
-from .model import model_fn
-from .input import input_fn
+from model import model_fn
+from input import input_fn
+
+import sys
+sys.path.append('/home/pc620/proj/tf-dist/')
+import os
 
 import tensorflow as tf
 from tensorflow.contrib.training.python.training import hparam
@@ -32,7 +36,7 @@ def get_args():
     default='mirror')
 
   parser.add_argument('--dataset',
-    choices=['cifar10', 'ecoset', 'imagenet', 'ecoset-h5', 'imagenet-h5'],
+    choices=['cifar10', 'ecoset-tfr64', 'ecoset-tfr', 'ecoset', 'imagenet', 'ecoset-h5', 'imagenet-h5'],
     default='cifar10')
 
   return parser.parse_args()
@@ -45,12 +49,24 @@ def get_dataset(dataset):
               cifar10.train_input_fn
   elif dataset.endswith('-h5'):
       import filesh5
-      filename = "/home/js947/rds/rds-hpc-support/rse/full_%s.h5" % dataset[:-3]
+      filename = "%s/rds/rds-hpc-support/rse/full_%s.h5" % (os.environ['HOME'], dataset[:-3])
       return (64, 64, 3), filesh5.num_classes(filename), \
               filesh5.make_input_fn(filename, "test"), \
               filesh5.make_input_fn(filename, "train")
+  elif dataset.endswith('-tfr64'):
+      import tfrecords
+      filename = "%s/rds/rds-hpc-support/rse/tfrecord_%s_64_64" % (os.environ['HOME'], dataset[:-6])
+      return (64, 64, 3), tfrecords.num_classes(filename), \
+              tfrecords.make_input_fn(filename, "test"), \
+              tfrecords.make_input_fn(filename, "train")
+  elif dataset.endswith('-tfr'):
+      import tfrecords
+      filename = "%s/rds/rds-hpc-support/rse/tfrecord_%s" % (os.environ['HOME'], dataset[:-4])
+      return (64, 64, 3), tfrecords.num_classes(filename), \
+              tfrecords.make_input_fn(filename, "test"), \
+              tfrecords.make_input_fn(filename, "train")
   else:
-      basepath = "/home/js947/rds/rds-hpc-support/rse/full_%s" % dataset
+      basepath = "%s/rds/rds-hpc-support/rse/full_%s" % (os.environ['HOME'], dataset)
       import files
       return (64, 64, 3), files.num_classes("%s/test"%basepath), \
               files.make_input_fn("%s/test"%basepath), \
@@ -60,23 +76,43 @@ def train_and_evaluate(hparams):
   img_shape, num_classes, test_input_fn, train_input_fn = get_dataset(hparams.dataset)  
 
   model = model_fn(img_shape, num_classes, hparams.learning_rate)
-  model.summary()
 
+#  model.summary()
+  model.load_weights('my_model_weights.h5')
   strategy = {
-          'mirror': MirroredStrategy(num_gpus=hparams.num_gpus),
+          'mirror': MirroredStrategy(num_gpus=hparams.num_gpus, prefetch_on_device=True),
           'collective': CollectiveAllReduceStrategy(num_gpus_per_worker=hparams.num_gpus)
           }[hparams.dist]
-  config = tf.estimator.RunConfig(train_distribute=strategy, save_checkpoints_secs=2000)
 
-  estimator = tf.keras.estimator.model_to_estimator(model, \
-          model_dir=hparams.job_dir, config=config)
+#  config = tf.estimator.RunConfig(train_distribute=strategy, save_checkpoints_steps=500)
+   
+  dist_config = tf.contrib.distribute.DistributeConfig(
+           train_distribute=strategy,
+           eval_distribute=strategy,
+           remote_cluster=None
+           )
+  session_config = tf.ConfigProto(
+           inter_op_parallelism_threads=0,
+           intra_op_parallelism_threads=0,
+           allow_soft_placement=True
+           )
+  config = tf.estimator.RunConfig(
+           save_checkpoints_steps=2000,
+           session_config=session_config,
+           experimental_distribute=dist_config
+           )
 
+  estimator = tf.keras.estimator.model_to_estimator(model,
+          model_dir=hparams.job_dir,
+          config=config)
+  
   train_spec = tf.estimator.TrainSpec(
-          input_fn=lambda: train_input_fn(hparams.batch_size))
+          input_fn=lambda: train_input_fn(hparams.batch_size),
+          max_steps=8000)
 
   eval_spec = tf.estimator.EvalSpec(
           input_fn=lambda: test_input_fn(hparams.batch_size),
-          steps=600,
+          steps=50,
           start_delay_secs=10,
           throttle_secs=10)
 
