@@ -2,3 +2,5 @@ env
 __pycache__
 Session.vim
 *.out
+*.swp
+my_model_weights.h5
